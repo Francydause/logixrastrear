@@ -1140,9 +1140,7 @@ let adminPanel = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     adminPanel = new AdminPanel();
+    window.adminPanel = adminPanel;
 });
-
-// Export for global access
-window.adminPanel = adminPanel;
 
 export default AdminPanel;
