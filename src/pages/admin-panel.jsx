@@ -1019,7 +1019,7 @@ class AdminPanel {
 
     showEditModal() {
         const modal = document.getElementById('editModal');
-        if (lead) {
+        if (modal) {
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
         }
