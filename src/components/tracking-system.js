@@ -2,7 +2,6 @@
  * Sistema de rastreamento baseado APENAS em dados do banco
  * SEM API DE CPF - APENAS DADOS DO SUPABASE
  */
-import { DatabaseService } from '../services/database.js';
 import { UIHelpers } from '../utils/ui-helpers.js';
 import { CPFValidator } from '../utils/cpf-validator.js';
 import { ZentraPayService } from '../services/zentra-pay.js';
@@ -12,14 +11,13 @@ export class TrackingSystem {
         this.currentCPF = null;
         this.trackingData = null;
         this.leadData = null; // Dados do banco
-        this.dbService = new DatabaseService();
         this.zentraPayService = new ZentraPayService();
         this.isInitialized = false;
         this.pixData = null;
         this.paymentErrorShown = false;
         this.paymentRetryCount = 0;
         
-        console.log('TrackingSystem inicializado - APENAS DADOS DO BANCO');
+        console.log('TrackingSystem inicializado - APENAS DADOS LOCAIS');
         this.initWhenReady();
     }
 
