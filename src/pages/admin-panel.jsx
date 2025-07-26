@@ -3,9 +3,11 @@
  */
 
 import { CPFValidator } from '../utils/cpf-validator.js';
+import { DatabaseService } from '../services/database.js';
 
 class AdminPanel {
     constructor() {
+        this.dbService = new DatabaseService();
         this.leads = [];
         this.filteredLeads = [];
         this.selectedLeads = new Set();
@@ -15,6 +17,7 @@ class AdminPanel {
         this.systemMode = 'auto';
         this.bulkData = [];
         this.bulkResults = null;
+        this.editingLead = null;
         
         console.log('🔧 AdminPanel inicializado - Modo Local');
         this.init();
@@ -125,6 +128,22 @@ class AdminPanel {
         const massDeleteLeads = document.getElementById('massDeleteLeads');
         if (massDeleteLeads) {
             massDeleteLeads.addEventListener('click', () => this.handleMassAction('delete'));
+        }
+
+        // Edit Modal Events
+        const closeEditModal = document.getElementById('closeEditModal');
+        if (closeEditModal) {
+            closeEditModal.addEventListener('click', () => this.closeEditModal());
+        }
+
+        const cancelEdit = document.getElementById('cancelEdit');
+        if (cancelEdit) {
+            cancelEdit.addEventListener('click', () => this.closeEditModal());
+        }
+
+        const editForm = document.getElementById('editForm');
+        if (editForm) {
+            editForm.addEventListener('submit', (e) => this.handleEditSubmit(e));
         }
 
     }
@@ -946,35 +965,128 @@ class AdminPanel {
     applyFilters() {
         console.log('🔍 Aplicando filtros...');
         // Implementation for filters
+        // Implementation for filters
     }
 
     handleMassAction(action) {
         console.log(`🔧 Ação em massa: ${action} para ${this.selectedLeads.size} leads`);
         // Implementation for mass actions
+        // Implementation for mass actions
     }
 
-    editLead(leadId) {
+    async editLead(leadId) {
         console.log(`✏️ Editando lead: ${leadId}`);
-        // Find lead in localStorage and show edit modal
-        const leads = JSON.parse(localStorage.getItem('leads') || '[]');
-        const lead = leads.find(l => (l.id || l.cpf) === leadId);
-        if (lead) {
-            // Populate edit form and show modal
-            console.log('Lead encontrado para edição:', lead);
+        
+        try {
+            // Find lead in localStorage
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            const lead = leads.find(l => (l.id || l.cpf) === leadId);
+            
+            if (!lead) {
+                this.showNotification('Lead não encontrado', 'error');
+                return;
+            }
+            
+            this.editingLead = lead;
+            this.populateEditForm(lead);
+            this.showEditModal();
+            
+        } catch (error) {
+            console.error('❌ Erro ao carregar lead para edição:', error);
+            this.showNotification('Erro ao carregar dados do lead', 'error');
         }
     }
 
-    nextStage(leadId) {
+    populateEditForm(lead) {
+        document.getElementById('editName').value = lead.nome_completo || '';
+        document.getElementById('editCPF').value = lead.cpf || '';
+        document.getElementById('editEmail').value = lead.email || '';
+        document.getElementById('editPhone').value = lead.telefone || '';
+        document.getElementById('editAddress').value = lead.endereco || '';
+        document.getElementById('editStage').value = lead.etapa_atual || 1;
+        
+        // Set current date/time for stage if not exists
+        if (lead.updated_at) {
+            const date = new Date(lead.updated_at);
+            const localDateTime = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            document.getElementById('editStageDateTime').value = localDateTime;
+        } else {
+            const now = new Date();
+            const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            document.getElementById('editStageDateTime').value = localDateTime;
+        }
+    }
+
+    showEditModal() {
+        const modal = document.getElementById('editModal');
+        if (lead) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    closeEditModal() {
+        const modal = document.getElementById('editModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        this.editingLead = null;
+    }
+
+    async handleEditSubmit(e) {
+        e.preventDefault();
+        
+        if (!this.editingLead) {
+            this.showNotification('Nenhum lead selecionado para edição', 'error');
+            return;
+        }
+
+        try {
+            const formData = new FormData(e.target);
+            const updatedLead = {
+                ...this.editingLead,
+                nome_completo: document.getElementById('editName').value,
+                cpf: document.getElementById('editCPF').value.replace(/[^\d]/g, ''),
+                email: document.getElementById('editEmail').value,
+                telefone: document.getElementById('editPhone').value,
+                endereco: document.getElementById('editAddress').value,
+                etapa_atual: parseInt(document.getElementById('editStage').value),
+                updated_at: new Date().toISOString()
+            };
+
+            // Update in localStorage
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            const leadIndex = leads.findIndex(l => (l.id || l.cpf) === (this.editingLead.id || this.editingLead.cpf));
+            
+            if (leadIndex !== -1) {
+                leads[leadIndex] = updatedLead;
+                localStorage.setItem('leads', JSON.stringify(leads));
+                
+                this.closeEditModal();
+                this.loadLeads();
+                this.showNotification('Lead atualizado com sucesso!', 'success');
+            } else {
+                throw new Error('Lead não encontrado para atualização');
+            }
+            
+        } catch (error) {
+            console.error('❌ Erro ao atualizar lead:', error);
+            this.showNotification('Erro ao atualizar lead: ' + error.message, 'error');
+        }
+    }
+
+    async nextStage(leadId) {
         console.log(`⏭️ Próxima etapa para lead: ${leadId}`);
-        this.updateLeadStage(leadId, 1);
+        await this.updateLeadStage(leadId, 1);
     }
 
-    prevStage(leadId) {
+    async prevStage(leadId) {
         console.log(`⏮️ Etapa anterior para lead: ${leadId}`);
-        this.updateLeadStage(leadId, -1);
+        await this.updateLeadStage(leadId, -1);
     }
 
-    updateLeadStage(leadId, direction) {
+    async updateLeadStage(leadId, direction) {
         try {
             const leads = JSON.parse(localStorage.getItem('leads') || '[]');
             const leadIndex = leads.findIndex(l => (l.id || l.cpf) === leadId);
@@ -988,19 +1100,30 @@ class AdminPanel {
                 
                 localStorage.setItem('leads', JSON.stringify(leads));
                 this.loadLeads();
+                
+                const actionText = direction > 0 ? 'avançada' : 'retrocedida';
+                this.showNotification(`Etapa ${actionText} com sucesso! Nova etapa: ${newStage}`, 'success');
                 console.log(`✅ Etapa atualizada para ${newStage}`);
+            } else {
+                throw new Error('Lead não encontrado');
             }
         } catch (error) {
             console.error('❌ Erro ao atualizar etapa:', error);
+            this.showNotification('Erro ao atualizar etapa: ' + error.message, 'error');
         }
     }
 
-    deleteLead(leadId) {
+    async deleteLead(leadId) {
         if (confirm('Tem certeza que deseja excluir este lead?')) {
             console.log(`🗑️ Excluindo lead: ${leadId}`);
             try {
                 const leads = JSON.parse(localStorage.getItem('leads') || '[]');
                 const filteredLeads = leads.filter(l => (l.id || l.cpf) !== leadId);
+                
+                if (leads.length === filteredLeads.length) {
+                    throw new Error('Lead não encontrado para exclusão');
+                }
+                
                 localStorage.setItem('leads', JSON.stringify(filteredLeads));
                 this.loadLeads();
                 this.showNotification('Lead excluído com sucesso!', 'success');
