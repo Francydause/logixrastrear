@@ -1,7 +1,6 @@
 /**
  * Painel Administrativo - Sistema de Gerenciamento de Leads
  */
-import { DatabaseService } from '../services/database.js';
 
 class AdminPanel {
     constructor() {
