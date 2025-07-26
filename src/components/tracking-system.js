@@ -915,11 +915,19 @@ export class TrackingSystem {
         if (!this.currentCPF) return;
 
         try {
-            await this.dbService.updatePaymentStatus(this.currentCPF, status);
-            await this.dbService.updateLeadStage(this.currentCPF, 12); // Etapa liberado
-            console.log('✅ Status de pagamento atualizado no banco:', status);
+            // Update in localStorage
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            const leadIndex = leads.findIndex(l => l.cpf && l.cpf.replace(/[^\d]/g, '') === this.currentCPF);
+            
+            if (leadIndex !== -1) {
+                leads[leadIndex].status_pagamento = status;
+                leads[leadIndex].etapa_atual = 12; // Etapa liberado
+                leads[leadIndex].updated_at = new Date().toISOString();
+                localStorage.setItem('leads', JSON.stringify(leads));
+                console.log('✅ Status de pagamento atualizado no localStorage:', status);
+            }
         } catch (error) {
-            console.error('❌ Erro ao atualizar status no banco:', error);
+            console.error('❌ Erro ao atualizar status no localStorage:', error);
         }
     }
 
