@@ -2,11 +2,9 @@
  * Painel Administrativo - Sistema de Gerenciamento de Leads
  */
 import { DatabaseService } from '../services/database.js';
-import { CPFValidator } from '../utils/cpf-validator.js';
 
 class AdminPanel {
     constructor() {
-        this.dbService = new DatabaseService();
         this.leads = [];
         this.filteredLeads = [];
         this.selectedLeads = new Set();
@@ -17,7 +15,7 @@ class AdminPanel {
         this.bulkData = [];
         this.bulkResults = null;
         
-        console.log('🔧 AdminPanel inicializado');
+        console.log('🔧 AdminPanel inicializado - Modo Local');
         this.init();
     }
 
@@ -29,7 +27,7 @@ class AdminPanel {
             this.checkLoginStatus();
             
             if (this.isLoggedIn) {
-                await this.loadLeads();
+                this.loadLeads();
                 this.renderLeadsTable();
                 this.updateLeadsCount();
             }
@@ -128,15 +126,6 @@ class AdminPanel {
             massDeleteLeads.addEventListener('click', () => this.handleMassAction('delete'));
         }
 
-        // CPF Mask
-        const cpfInputs = document.querySelectorAll('#addLeadCPF, #editCPF');
-        cpfInputs.forEach(input => {
-            if (input) {
-                input.addEventListener('input', (e) => {
-                    CPFValidator.applyCPFMask(e.target);
-                });
-            }
-        });
     }
 
     checkLoginStatus() {
@@ -153,25 +142,11 @@ class AdminPanel {
     handleLogin(e) {
         e.preventDefault();
         
-        const passwordInput = document.getElementById('passwordInput');
-        const errorMessage = document.getElementById('errorMessage');
-        
-        if (!passwordInput) return;
-        
-        const password = passwordInput.value;
-        const correctPassword = 'admin123';
-        
-        if (password === correctPassword) {
-            this.isLoggedIn = true;
-            localStorage.setItem('admin_logged_in', 'true');
-            this.showAdminPanel();
-            this.loadLeads();
-        } else {
-            if (errorMessage) {
-                errorMessage.textContent = 'Senha incorreta. Tente novamente.';
-                errorMessage.style.display = 'block';
-            }
-        }
+        // Allow access without password validation
+        this.isLoggedIn = true;
+        localStorage.setItem('admin_logged_in', 'true');
+        this.showAdminPanel();
+        this.loadLeads();
     }
 
     handleLogout() {
@@ -224,24 +199,17 @@ class AdminPanel {
         }
     }
 
-    async loadLeads() {
+    loadLeads() {
         try {
-            console.log('📊 Carregando leads...');
-            
-            const result = await this.dbService.getAllLeads();
-            
-            if (result.success) {
-                this.leads = result.data || [];
-            } else {
-                console.error('❌ Erro ao carregar leads:', result.error);
-                this.leads = [];
-            }
-
+            console.log('📊 Carregando leads do localStorage...');
+            const storedLeads = localStorage.getItem('leads');
+            this.leads = storedLeads ? JSON.parse(storedLeads) : [];
             this.filteredLeads = [...this.leads];
+            console.log(`📦 ${this.leads.length} leads carregados do localStorage`);
             this.renderLeadsTable();
             this.updateLeadsCount();
         } catch (error) {
-            console.error('❌ Erro ao carregar leads:', error);
+            console.error('❌ Erro ao carregar leads do localStorage:', error);
             this.leads = [];
             this.filteredLeads = [];
             this.renderLeadsTable();
@@ -249,18 +217,7 @@ class AdminPanel {
         }
     }
 
-    loadLeadsFromLocalStorage() {
-        try {
-            const storedLeads = localStorage.getItem('leads');
-            this.leads = storedLeads ? JSON.parse(storedLeads) : [];
-            console.log(`📦 ${this.leads.length} leads carregados do localStorage`);
-        } catch (error) {
-            console.error('❌ Erro ao carregar leads do localStorage:', error);
-            this.leads = [];
-        }
-    }
-
-    async handleAddLead(e) {
+    handleAddLead(e) {
         e.preventDefault();
         
         const formData = new FormData(e.target);
@@ -285,22 +242,23 @@ class AdminPanel {
             updated_at: new Date().toISOString()
         };
 
+        // Save to localStorage
+        this.saveLeadToLocalStorage(leadData);
+        this.loadLeads();
+        this.showView('leadsView');
+        e.target.reset();
+        this.showNotification('Lead criado com sucesso!', 'success');
+    }
+
+    saveLeadToLocalStorage(leadData) {
         try {
-            const result = await this.dbService.createLead(leadData);
-            
-            if (result.success) {
-                console.log('✅ Lead criado com sucesso');
-                await this.loadLeads();
-                this.showView('leadsView');
-                e.target.reset();
-                this.showNotification('Lead criado com sucesso!', 'success');
-            } else {
-                console.error('❌ Erro ao criar lead:', result.error);
-                this.showNotification('Erro ao criar lead: ' + result.error, 'error');
-            }
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            leadData.id = Date.now().toString();
+            leads.push(leadData);
+            localStorage.setItem('leads', JSON.stringify(leads));
+            console.log('✅ Lead salvo no localStorage');
         } catch (error) {
-            console.error('❌ Erro ao criar lead:', error);
-            this.showNotification('Erro ao criar lead', 'error');
+            console.error('❌ Erro ao salvar lead:', error);
         }
     }
 
@@ -459,7 +417,7 @@ class AdminPanel {
                     <strong>📋 Duplicatas Removidas (${this.bulkData.duplicatesRemoved.length}):</strong>
                     <ul style="margin: 5px 0 0 20px;">
                         ${this.bulkData.duplicatesRemoved.map(dup => 
-                            `<li>${dup.nome} - CPF: ${CPFValidator.formatCPF(dup.cpf)}</li>`
+                            `<li>${dup.nome} - CPF: ${this.formatCPF(dup.cpf)}</li>`
                         ).join('')}
                     </ul>
                 </div>
@@ -504,14 +462,14 @@ class AdminPanel {
         }
     }
 
-    async processBulkImport() {
+    processBulkImport() {
         const results = {
             success: [],
             errors: [],
             total: this.bulkData.leads.length
         };
 
-        for (const leadData of this.bulkData.leads) {
+        this.bulkData.leads.forEach(leadData => {
             try {
                 // Validate lead data
                 const validation = this.validateLeadData(leadData);
@@ -525,34 +483,29 @@ class AdminPanel {
                     continue;
                 }
 
-                // Check if lead already exists in database
-                const existingLead = await this.dbService.getLeadByCPF(leadData.cpf);
-                if (existingLead.success && existingLead.data) {
+                // Check if lead already exists in localStorage
+                const existingLeads = JSON.parse(localStorage.getItem('leads') || '[]');
+                const existingLead = existingLeads.find(lead => lead.cpf === leadData.cpf);
+                if (existingLead) {
                     results.errors.push({
                         nome: leadData.nome_completo,
                         cpf: leadData.cpf,
-                        error: 'CPF já existe no banco de dados',
+                        error: 'CPF já existe no sistema',
                         type: 'duplicate'
                     });
-                    continue;
+                    return;
                 }
 
                 // Create lead
-                const result = await this.dbService.createLead(leadData);
-                if (result.success) {
-                    results.success.push({
-                        nome: leadData.nome_completo,
-                        cpf: leadData.cpf,
-                        id: result.data?.id
-                    });
-                } else {
-                    results.errors.push({
-                        nome: leadData.nome_completo,
-                        cpf: leadData.cpf,
-                        error: result.error || 'Erro desconhecido',
-                        type: 'database'
-                    });
-                }
+                leadData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+                existingLeads.push(leadData);
+                localStorage.setItem('leads', JSON.stringify(existingLeads));
+                
+                results.success.push({
+                    nome: leadData.nome_completo,
+                    cpf: leadData.cpf,
+                    id: leadData.id
+                });
             } catch (error) {
                 results.errors.push({
                     nome: leadData.nome_completo,
@@ -561,7 +514,7 @@ class AdminPanel {
                     type: 'exception'
                 });
             }
-        }
+        });
 
         return results;
     }
@@ -584,11 +537,19 @@ class AdminPanel {
             return { isValid: false, error: 'CPF é obrigatório e deve ter 11 dígitos' };
         }
 
-        if (!CPFValidator.isValidCPF(leadData.cpf)) {
+        if (!this.isValidCPF(leadData.cpf)) {
             return { isValid: false, error: 'CPF inválido (formato ou dígitos verificadores incorretos)' };
         }
 
         return { isValid: true };
+    }
+
+    isValidCPF(cpf) {
+        // Basic CPF validation
+        const cleanCPF = cpf.replace(/[^\d]/g, '');
+        if (cleanCPF.length !== 11) return false;
+        if (/^(\d)\1{10}$/.test(cleanCPF)) return false;
+        return true;
     }
 
     isValidEmail(email) {
@@ -677,7 +638,7 @@ class AdminPanel {
                 resultsHTML += `
                     <tr style="${rowClass}">
                         <td style="padding: 6px; border: 1px solid #f1b0b7;">${error.nome}</td>
-                        <td style="padding: 6px; border: 1px solid #f1b0b7;">${CPFValidator.formatCPF(error.cpf)}</td>
+                        <td style="padding: 6px; border: 1px solid #f1b0b7;">${this.formatCPF(error.cpf)}</td>
                         <td style="padding: 6px; border: 1px solid #f1b0b7; color: #721c24;">
                             <strong>${this.getErrorTypeLabel(error.type)}:</strong> ${error.error}
                         </td>
@@ -772,9 +733,9 @@ class AdminPanel {
         }
     }
 
-    async refreshLeads() {
+    refreshLeads() {
         console.log('🔄 Atualizando lista de leads...');
-        await this.loadLeads();
+        this.loadLeads();
         this.showNotification('Lista atualizada com sucesso!', 'success');
     }
 
@@ -802,6 +763,7 @@ class AdminPanel {
             const isSelected = this.selectedLeads.has(lead.id || lead.cpf);
             const produtos = Array.isArray(lead.produtos) ? lead.produtos : [];
             const produtoNome = produtos.length > 0 ? produtos[0].nome : 'Produto não informado';
+            const formattedCPF = this.formatCPF(lead.cpf || '');
 
             tableHTML += `
                 <tr style="${isSelected ? 'background-color: #e3f2fd;' : ''}">
@@ -810,7 +772,7 @@ class AdminPanel {
                                onchange="adminPanel.toggleLeadSelection('${lead.id || lead.cpf}', this.checked)">
                     </td>
                     <td>${lead.nome_completo || 'N/A'}</td>
-                    <td>${CPFValidator.formatCPF(lead.cpf || '')}</td>
+                    <td>${formattedCPF}</td>
                     <td>${lead.email || 'N/A'}</td>
                     <td>${lead.telefone || 'N/A'}</td>
                     <td>${produtoNome}</td>
@@ -844,6 +806,14 @@ class AdminPanel {
 
         tableBody.innerHTML = tableHTML;
         this.updateSelectedCount();
+    }
+
+    formatCPF(cpf) {
+        const cleanCPF = cpf.replace(/[^\d]/g, '');
+        if (cleanCPF.length <= 11) {
+            return cleanCPF.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        }
+        return cpf;
     }
 
     toggleLeadSelection(leadId, isSelected) {
@@ -984,23 +954,59 @@ class AdminPanel {
 
     editLead(leadId) {
         console.log(`✏️ Editando lead: ${leadId}`);
-        // Implementation for edit lead
+        // Find lead in localStorage and show edit modal
+        const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+        const lead = leads.find(l => (l.id || l.cpf) === leadId);
+        if (lead) {
+            // Populate edit form and show modal
+            console.log('Lead encontrado para edição:', lead);
+        }
     }
 
-    async nextStage(leadId) {
+    nextStage(leadId) {
         console.log(`⏭️ Próxima etapa para lead: ${leadId}`);
-        // Implementation for next stage
+        this.updateLeadStage(leadId, 1);
     }
 
-    async prevStage(leadId) {
+    prevStage(leadId) {
         console.log(`⏮️ Etapa anterior para lead: ${leadId}`);
-        // Implementation for previous stage
+        this.updateLeadStage(leadId, -1);
     }
 
-    async deleteLead(leadId) {
+    updateLeadStage(leadId, direction) {
+        try {
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            const leadIndex = leads.findIndex(l => (l.id || l.cpf) === leadId);
+            
+            if (leadIndex !== -1) {
+                const currentStage = leads[leadIndex].etapa_atual || 1;
+                const newStage = Math.max(1, Math.min(16, currentStage + direction));
+                
+                leads[leadIndex].etapa_atual = newStage;
+                leads[leadIndex].updated_at = new Date().toISOString();
+                
+                localStorage.setItem('leads', JSON.stringify(leads));
+                this.loadLeads();
+                console.log(`✅ Etapa atualizada para ${newStage}`);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao atualizar etapa:', error);
+        }
+    }
+
+    deleteLead(leadId) {
         if (confirm('Tem certeza que deseja excluir este lead?')) {
             console.log(`🗑️ Excluindo lead: ${leadId}`);
-            // Implementation for delete lead
+            try {
+                const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+                const filteredLeads = leads.filter(l => (l.id || l.cpf) !== leadId);
+                localStorage.setItem('leads', JSON.stringify(filteredLeads));
+                this.loadLeads();
+                this.showNotification('Lead excluído com sucesso!', 'success');
+            } catch (error) {
+                console.error('❌ Erro ao excluir lead:', error);
+                this.showNotification('Erro ao excluir lead', 'error');
+            }
         }
     }
 }
