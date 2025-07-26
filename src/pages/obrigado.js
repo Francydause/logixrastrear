@@ -2,12 +2,10 @@
  * Página de Obrigado - Pós-venda
  */
 import { VegaDataProcessor } from '../utils/vega-data.js';
-import { DatabaseService } from '../services/database.js';
 import { CPFValidator } from '../utils/cpf-validator.js';
 
 class ObrigadoPage {
     constructor() {
-        this.dbService = new DatabaseService();
         this.vegaData = null;
         this.init();
     }
@@ -66,22 +64,21 @@ class ObrigadoPage {
 
     async saveLeadData() {
         try {
-            // Verificar se o lead já existe
-            const existingLead = await this.dbService.getLeadByCPF(this.vegaData.cpf);
+            // Save to localStorage instead of database
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            const existingLeadIndex = leads.findIndex(lead => lead.cpf === this.vegaData.cpf);
             
-            if (existingLead.success && existingLead.data) {
+            if (existingLeadIndex !== -1) {
                 console.log('📝 Lead já existe, atualizando dados');
-                // Atualizar dados existentes se necessário
+                leads[existingLeadIndex] = { ...leads[existingLeadIndex], ...this.vegaData };
             } else {
-                console.log('📝 Criando novo lead no banco de dados');
-                const result = await this.dbService.createLead(this.vegaData);
-                
-                if (result.success) {
-                    console.log('✅ Lead salvo com sucesso');
-                } else {
-                    console.warn('⚠️ Erro ao salvar lead:', result.error);
-                }
+                console.log('📝 Criando novo lead no localStorage');
+                this.vegaData.id = Date.now().toString();
+                leads.push(this.vegaData);
             }
+            
+            localStorage.setItem('leads', JSON.stringify(leads));
+            console.log('✅ Lead salvo com sucesso no localStorage');
         } catch (error) {
             console.error('❌ Erro ao salvar dados do lead:', error);
         }
