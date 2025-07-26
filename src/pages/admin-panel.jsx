@@ -480,7 +480,7 @@ class AdminPanel {
                         error: validation.error,
                         type: 'validation'
                     });
-                    continue;
+                    return;
                 }
 
                 // Check if lead already exists in localStorage
