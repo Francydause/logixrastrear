@@ -330,6 +330,10 @@ export class TrackingSystem {
         }
     }
 
+    async getLeadFromLocalStorage(cpf) {
+        return await this.dbService.getLeadByCPF(cpf);
+    }
+
     displayOrderDetailsFromDatabase() {
         if (!this.leadData) return;
 
