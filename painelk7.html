@@ -578,25 +578,11 @@
             
             .navigation-section {
                 flex-direction: column;
-            }
-            .leads-table {
-                font-size: 0.7rem;
-            }
-
-            .leads-table th,
-            .leads-table td {
-                padding: 8px 6px;
-            }
-
-            .lead-actions {
-                flex-direction: column;
-            }
-
-            .action-button {
-                font-size: 0.6rem;
-                padding: 3px 6px;
-            }
-        }
+        // Allow access without password validation
+        this.isLoggedIn = true;
+        localStorage.setItem('admin_logged_in', 'true');
+        this.showAdminPanel();
+        this.loadLeads();
     </style>
 </head>
 <body>
