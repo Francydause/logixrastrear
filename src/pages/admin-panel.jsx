@@ -2,6 +2,8 @@
  * Painel Administrativo - Sistema de Gerenciamento de Leads
  */
 
+import { CPFValidator } from '../utils/cpf-validator.js';
+
 class AdminPanel {
     constructor() {
         this.leads = [];
