@@ -141,7 +141,7 @@ class AdminPanel {
             prevAllButton.addEventListener('click', () => this.handleSystemAction('prevAll'));
         }
 
-        const refreshButton = document.getElementById('refreshButton');
+        refreshButton = document.getElementById('refreshButton');
         if (refreshButton) {
             refreshButton.addEventListener('click', () => this.handleSystemAction('refresh'));
         }
