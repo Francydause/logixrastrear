@@ -130,6 +130,27 @@ class AdminPanel {
             massDeleteLeads.addEventListener('click', () => this.handleMassAction('delete'));
         }
 
+        // Botões de controle do sistema
+        const nextAllButton = document.getElementById('nextAllButton');
+        if (nextAllButton) {
+            nextAllButton.addEventListener('click', () => this.handleSystemAction('nextAll'));
+        }
+
+        const prevAllButton = document.getElementById('prevAllButton');
+        if (prevAllButton) {
+            prevAllButton.addEventListener('click', () => this.handleSystemAction('prevAll'));
+        }
+
+        const refreshButton = document.getElementById('refreshButton');
+        if (refreshButton) {
+            refreshButton.addEventListener('click', () => this.handleSystemAction('refresh'));
+        }
+
+        const clearAllButton = document.getElementById('clearAllButton');
+        if (clearAllButton) {
+            clearAllButton.addEventListener('click', () => this.handleSystemAction('clearAll'));
+        }
+
         // Edit Modal Events
         const closeEditModal = document.getElementById('closeEditModal');
         if (closeEditModal) {
@@ -759,6 +780,208 @@ class AdminPanel {
         this.showNotification('Lista atualizada com sucesso!', 'success');
     }
 
+    // Aplicar filtros aos leads
+    applyFilters() {
+        console.log('🔍 Aplicando filtros...');
+        
+        const searchInput = document.getElementById('searchInput');
+        const dateFilter = document.getElementById('dateFilter');
+        const stageFilter = document.getElementById('stageFilter');
+        
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const dateValue = dateFilter ? dateFilter.value : '';
+        const stageValue = stageFilter ? stageFilter.value : 'all';
+        
+        console.log('Filtros aplicados:', { searchTerm, dateValue, stageValue });
+        
+        this.filteredLeads = this.leads.filter(lead => {
+            // Filtro por nome ou CPF
+            if (searchTerm) {
+                const nameMatch = (lead.nome_completo || '').toLowerCase().includes(searchTerm);
+                const cpfMatch = (lead.cpf || '').replace(/[^\d]/g, '').includes(searchTerm.replace(/[^\d]/g, ''));
+                if (!nameMatch && !cpfMatch) {
+                    return false;
+                }
+            }
+            
+            // Filtro por data
+            if (dateValue) {
+                const leadDate = new Date(lead.created_at);
+                const filterDate = new Date(dateValue);
+                if (leadDate.toDateString() !== filterDate.toDateString()) {
+                    return false;
+                }
+            }
+            
+            // Filtro por etapa
+            if (stageValue !== 'all') {
+                const leadStage = lead.etapa_atual || 1;
+                if (leadStage.toString() !== stageValue) {
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+        
+        console.log(`Filtros aplicados: ${this.filteredLeads.length} de ${this.leads.length} leads`);
+        
+        // Resetar página atual
+        this.currentPage = 1;
+        
+        // Atualizar tabela
+        this.renderLeadsTable();
+        this.updateLeadsCount();
+        
+        this.showNotification(`Filtros aplicados: ${this.filteredLeads.length} leads encontrados`, "info");
+    }
+
+    // Lidar com ações do sistema (botões de controle)
+    async handleSystemAction(action) {
+        console.log(`🔧 Executando ação do sistema: ${action}`);
+        
+        // Aplicar filtros primeiro para obter leads corretos
+        this.applyFilters();
+        
+        const filteredLeads = this.filteredLeads;
+        
+        if (action === 'refresh') {
+            this.showLoadingButton('refreshButton', 'Atualizando...');
+            try {
+                this.refreshLeads();
+                this.showNotification("Lista atualizada com sucesso!", "success");
+            } finally {
+                this.hideLoadingButton('refreshButton', '<i class="fas fa-sync"></i> Atualizar Lista');
+            }
+            return;
+        }
+        
+        if (action === 'clearAll') {
+            if (filteredLeads.length === 0) {
+                this.showNotification("Nenhum lead encontrado com os filtros aplicados", "error");
+                return;
+            }
+            
+            const confirmed = confirm(`Tem certeza que deseja excluir ${filteredLeads.length} leads filtrados? Esta ação é irreversível.`);
+            if (!confirmed) return;
+            
+            this.showLoadingButton('clearAllButton', 'Excluindo...');
+            try {
+                await this.deleteFilteredLeads(filteredLeads);
+                this.showNotification(`${filteredLeads.length} leads excluídos com sucesso!`, "success");
+            } catch (error) {
+                console.error('❌ Erro ao excluir leads:', error);
+                this.showNotification("Erro ao excluir leads: " + error.message, "error");
+            } finally {
+                this.hideLoadingButton('clearAllButton', '<i class="fas fa-trash"></i> Limpar Todos');
+            }
+            return;
+        }
+        
+        if (action === 'nextAll' || action === 'prevAll') {
+            if (filteredLeads.length === 0) {
+                this.showNotification("Nenhum lead encontrado com os filtros aplicados", "error");
+                return;
+            }
+            
+            const actionText = action === 'nextAll' ? 'avançar' : 'voltar';
+            const buttonId = action === 'nextAll' ? 'nextAllButton' : 'prevAllButton';
+            const buttonText = action === 'nextAll' ? 
+                '<i class="fas fa-forward"></i> Avançar Todos' : 
+                '<i class="fas fa-backward"></i> Voltar Todos';
+            
+            const confirmed = confirm(`Tem certeza que deseja ${actionText} ${filteredLeads.length} leads filtrados?`);
+            if (!confirmed) return;
+            
+            this.showLoadingButton(buttonId, `${actionText === 'avançar' ? 'Avançando' : 'Voltando'}...`);
+            try {
+                await this.updateFilteredLeadsStage(filteredLeads, action === 'nextAll' ? 1 : -1);
+                this.showNotification(`${filteredLeads.length} leads ${actionText === 'avançar' ? 'avançados' : 'voltados'} com sucesso!`, "success");
+            } catch (error) {
+                console.error(`❌ Erro ao ${actionText} leads:`, error);
+                this.showNotification(`Erro ao ${actionText} leads: ` + error.message, "error");
+            } finally {
+                this.hideLoadingButton(buttonId, buttonText);
+            }
+        }
+    }
+
+    // Mostrar loading em botão
+    showLoadingButton(buttonId, loadingText) {
+        const button = document.getElementById(buttonId);
+        if (button) {
+            button.dataset.originalText = button.innerHTML;
+            button.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${loadingText}`;
+            button.disabled = true;
+        }
+    }
+
+    // Esconder loading do botão
+    hideLoadingButton(buttonId, originalText) {
+        const button = document.getElementById(buttonId);
+        if (button) {
+            button.innerHTML = originalText || button.dataset.originalText || button.innerHTML;
+            button.disabled = false;
+            delete button.dataset.originalText;
+        }
+    }
+
+    // Atualizar etapa de leads filtrados
+    async updateFilteredLeadsStage(filteredLeads, increment) {
+        try {
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            let updatedCount = 0;
+            
+            filteredLeads.forEach(filteredLead => {
+                const leadIndex = leads.findIndex(l => (l.id || l.cpf) === (filteredLead.id || filteredLead.cpf));
+                if (leadIndex !== -1) {
+                    const currentStage = leads[leadIndex].etapa_atual || 1;
+                    const newStage = Math.max(1, Math.min(16, currentStage + increment));
+                    
+                    if (newStage !== currentStage) {
+                        leads[leadIndex].etapa_atual = newStage;
+                        leads[leadIndex].updated_at = new Date().toISOString();
+                        updatedCount++;
+                    }
+                }
+            });
+            
+            localStorage.setItem('leads', JSON.stringify(leads));
+            
+            // Recarregar dados
+            this.loadLeads();
+            
+            console.log(`✅ ${updatedCount} leads atualizados`);
+            return updatedCount;
+        } catch (error) {
+            console.error('❌ Erro ao atualizar etapas:', error);
+            throw error;
+        }
+    }
+
+    // Excluir leads filtrados
+    async deleteFilteredLeads(filteredLeads) {
+        try {
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            const idsToDelete = filteredLeads.map(lead => lead.id || lead.cpf);
+            
+            const remainingLeads = leads.filter(lead => 
+                !idsToDelete.includes(lead.id || lead.cpf)
+            );
+            
+            localStorage.setItem('leads', JSON.stringify(remainingLeads));
+            
+            // Recarregar dados
+            this.loadLeads();
+            
+            console.log(`✅ ${filteredLeads.length} leads excluídos`);
+            return filteredLeads.length;
+        } catch (error) {
+            console.error('❌ Erro ao excluir leads:', error);
+            throw error;
+        }
+    }
+
     renderLeadsTable() {
         const tableBody = document.getElementById('leadsTableBody');
         const emptyState = document.getElementById('emptyState');
@@ -959,13 +1182,6 @@ class AdminPanel {
                 }
             }, 300);
         }, 3000);
-    }
-
-    // Placeholder methods for other functionality
-    applyFilters() {
-        console.log('🔍 Aplicando filtros...');
-        // Implementation for filters
-        // Implementation for filters
     }
 
     handleMassAction(action) {
