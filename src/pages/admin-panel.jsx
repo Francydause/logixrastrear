@@ -99,7 +99,7 @@ class AdminPanel {
         }
 
         // Controls
-        const refreshButton = document.getElementById('refreshButton');
+        let refreshButton = document.getElementById('refreshButton');
         if (refreshButton) {
             refreshButton.addEventListener('click', () => this.refreshLeads());
         }
