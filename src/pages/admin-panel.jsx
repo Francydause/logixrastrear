@@ -969,9 +969,202 @@ class AdminPanel {
     }
 
     handleMassAction(action) {
+        if (this.selectedLeads.size === 0) {
+            this.showNotification('Nenhum lead selecionado', 'error');
+            return;
+        }
+
         console.log(`🔧 Ação em massa: ${action} para ${this.selectedLeads.size} leads`);
-        // Implementation for mass actions
-        // Implementation for mass actions
+        
+        switch (action) {
+            case 'nextStage':
+                this.massNextStage();
+                break;
+            case 'prevStage':
+                this.massPrevStage();
+                break;
+            case 'setStage':
+                this.massSetStage();
+                break;
+            case 'delete':
+                this.massDeleteLeads();
+                break;
+            default:
+                console.warn('Ação não reconhecida:', action);
+        }
+    }
+
+    async massNextStage() {
+        if (this.selectedLeads.size === 0) {
+            this.showNotification('Nenhum lead selecionado', 'error');
+            return;
+        }
+
+        const confirmMessage = `Tem certeza que deseja avançar ${this.selectedLeads.size} lead(s) para a próxima etapa?`;
+        if (!confirm(confirmMessage)) return;
+
+        try {
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            let updatedCount = 0;
+
+            // Atualizar cada lead selecionado
+            this.selectedLeads.forEach(leadId => {
+                const leadIndex = leads.findIndex(l => (l.id || l.cpf) === leadId);
+                if (leadIndex !== -1) {
+                    const currentStage = leads[leadIndex].etapa_atual || 1;
+                    const newStage = Math.min(16, currentStage + 1); // Máximo 16
+                    
+                    leads[leadIndex].etapa_atual = newStage;
+                    leads[leadIndex].updated_at = new Date().toISOString();
+                    updatedCount++;
+                }
+            });
+
+            // Salvar no localStorage
+            localStorage.setItem('leads', JSON.stringify(leads));
+            
+            // Limpar seleção e recarregar tabela
+            this.selectedLeads.clear();
+            this.loadLeads();
+            
+            this.showNotification(`${updatedCount} lead(s) avançado(s) com sucesso!`, 'success');
+            console.log(`✅ ${updatedCount} leads avançados para próxima etapa`);
+            
+        } catch (error) {
+            console.error('❌ Erro ao avançar leads:', error);
+            this.showNotification('Erro ao avançar leads: ' + error.message, 'error');
+        }
+    }
+
+    async massPrevStage() {
+        if (this.selectedLeads.size === 0) {
+            this.showNotification('Nenhum lead selecionado', 'error');
+            return;
+        }
+
+        const confirmMessage = `Tem certeza que deseja retroceder ${this.selectedLeads.size} lead(s) para a etapa anterior?`;
+        if (!confirm(confirmMessage)) return;
+
+        try {
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            let updatedCount = 0;
+
+            // Atualizar cada lead selecionado
+            this.selectedLeads.forEach(leadId => {
+                const leadIndex = leads.findIndex(l => (l.id || l.cpf) === leadId);
+                if (leadIndex !== -1) {
+                    const currentStage = leads[leadIndex].etapa_atual || 1;
+                    const newStage = Math.max(1, currentStage - 1); // Mínimo 1
+                    
+                    leads[leadIndex].etapa_atual = newStage;
+                    leads[leadIndex].updated_at = new Date().toISOString();
+                    updatedCount++;
+                }
+            });
+
+            // Salvar no localStorage
+            localStorage.setItem('leads', JSON.stringify(leads));
+            
+            // Limpar seleção e recarregar tabela
+            this.selectedLeads.clear();
+            this.loadLeads();
+            
+            this.showNotification(`${updatedCount} lead(s) retrocedido(s) com sucesso!`, 'success');
+            console.log(`✅ ${updatedCount} leads retrocedidos para etapa anterior`);
+            
+        } catch (error) {
+            console.error('❌ Erro ao retroceder leads:', error);
+            this.showNotification('Erro ao retroceder leads: ' + error.message, 'error');
+        }
+    }
+
+    async massSetStage() {
+        if (this.selectedLeads.size === 0) {
+            this.showNotification('Nenhum lead selecionado', 'error');
+            return;
+        }
+
+        // Solicitar a etapa desejada
+        const targetStage = prompt(`Digite a etapa desejada (1-16) para ${this.selectedLeads.size} lead(s):`);
+        
+        if (!targetStage) return; // Usuário cancelou
+        
+        const stageNumber = parseInt(targetStage);
+        if (isNaN(stageNumber) || stageNumber < 1 || stageNumber > 16) {
+            this.showNotification('Etapa inválida. Digite um número entre 1 e 16.', 'error');
+            return;
+        }
+
+        const confirmMessage = `Tem certeza que deseja definir a etapa ${stageNumber} para ${this.selectedLeads.size} lead(s)?`;
+        if (!confirm(confirmMessage)) return;
+
+        try {
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            let updatedCount = 0;
+
+            // Atualizar cada lead selecionado
+            this.selectedLeads.forEach(leadId => {
+                const leadIndex = leads.findIndex(l => (l.id || l.cpf) === leadId);
+                if (leadIndex !== -1) {
+                    leads[leadIndex].etapa_atual = stageNumber;
+                    leads[leadIndex].updated_at = new Date().toISOString();
+                    updatedCount++;
+                }
+            });
+
+            // Salvar no localStorage
+            localStorage.setItem('leads', JSON.stringify(leads));
+            
+            // Limpar seleção e recarregar tabela
+            this.selectedLeads.clear();
+            this.loadLeads();
+            
+            this.showNotification(`${updatedCount} lead(s) definido(s) para etapa ${stageNumber} com sucesso!`, 'success');
+            console.log(`✅ ${updatedCount} leads definidos para etapa ${stageNumber}`);
+            
+        } catch (error) {
+            console.error('❌ Erro ao definir etapa dos leads:', error);
+            this.showNotification('Erro ao definir etapa dos leads: ' + error.message, 'error');
+        }
+    }
+
+    async massDeleteLeads() {
+        if (this.selectedLeads.size === 0) {
+            this.showNotification('Nenhum lead selecionado', 'error');
+            return;
+        }
+
+        const confirmMessage = `⚠️ ATENÇÃO: Tem certeza que deseja EXCLUIR ${this.selectedLeads.size} lead(s)?\n\nEsta ação não pode ser desfeita!`;
+        if (!confirm(confirmMessage)) return;
+
+        try {
+            const leads = JSON.parse(localStorage.getItem('leads') || '[]');
+            let deletedCount = 0;
+
+            // Filtrar leads removendo os selecionados
+            const remainingLeads = leads.filter(lead => {
+                const leadId = lead.id || lead.cpf;
+                if (this.selectedLeads.has(leadId)) {
+                    deletedCount++;
+                    return false; // Remove este lead
+                }
+                return true; // Mantém este lead
+            });
+
+            // Salvar no localStorage
+            localStorage.setItem('leads', JSON.stringify(remainingLeads));
+            
+            // Limpar seleção e recarregar tabela
+            this.selectedLeads.clear();
+            this.loadLeads();
+            
+            this.showNotification(`${deletedCount} lead(s) excluído(s) com sucesso!`, 'success');
+            console.log(`✅ ${deletedCount} leads excluídos`);
+            
+        } catch (error) {
+            console.error('❌ Erro ao excluir leads:', error);
+            this.showNotification('Erro ao excluir leads: ' + error.message, 'error');
+        }
     }
 
     async editLead(leadId) {
